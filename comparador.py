@@ -1,25 +1,225 @@
-import tkinter as tk
+import ttkbootstrap as tb
+from ttkbootstrap.constants import *
 from tkinter import ttk, messagebox
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
-import numpy as np
-from sklearn.preprocessing import MultiLabelBinarizer
 import json
 import os
 
-# Archivo JSON para almacenar usuarios
+# Archivo JSON para almacenar usuarios y valoraciones
 USER_DATA_FILE = "usuarios.json"
 
-# Funciones para manejo de usuarios
+# --------------------------
+# Funciones de Manejo de JSON
+# --------------------------
 def load_users():
+    """ Cargar datos de usuarios desde JSON """
     if os.path.exists(USER_DATA_FILE):
         with open(USER_DATA_FILE, 'r') as file:
-            return json.load(file)
+            try:
+                return json.load(file)
+            except json.JSONDecodeError:
+                return {}  # Si el archivo está vacío o corrupto
     return {}
 
 def save_users(users):
+    """ Guardar datos de usuarios en JSON """
     with open(USER_DATA_FILE, 'w') as file:
         json.dump(users, file, indent=4)
+
+# --------------------------
+# Cargar y Validar Datos CSV
+# --------------------------
+def load_data():
+    file_path = 'peliculas.csv'
+    if not os.path.exists(file_path):
+        messagebox.showerror("Error", "El archivo peliculas.csv no existe.")
+        exit()
+    try:
+        df = pd.read_csv(file_path)
+        required_columns = {'title', 'genre', 'director'}
+        if not required_columns.issubset(df.columns):
+            raise ValueError("El archivo CSV debe contener las columnas: title, genre, director.")
+        return df
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al leer el archivo CSV: {e}")
+        exit()
+
+# --------------------------
+# Actualizar Perfil del Usuario
+# --------------------------
+def update_user_profile(email, movie_title, rating):
+    users = load_users()
+    if email not in users:
+        users[email] = {"ratings": {}, "profile": {"genres": {}}}
+
+    # Verificar si la película existe
+    matching_movies = df[df['title'].str.strip().str.lower() == movie_title.strip().lower()]
+    if matching_movies.empty:
+        messagebox.showerror("Error", f"No se encontró la película: '{movie_title}'.")
+        return
+
+    # Actualizar valoraciones
+    movie = matching_movies.iloc[0]
+    users[email]["ratings"][movie['title']] = rating
+
+    # Actualizar perfil de géneros
+    genres = movie['genre'].split(", ") if pd.notna(movie['genre']) else []
+    for genre in genres:
+        users[email]['profile']['genres'][genre] = users[email]['profile']['genres'].get(genre, 0) + rating
+
+    save_users(users)
+
+
+# --------------------------
+# Generar Recomendaciones
+# --------------------------
+def recommend_movies_based_on_profile(email):
+    """ Genera recomendaciones basadas en el perfil de géneros del usuario. """
+    users = load_users()
+    if email not in users or not users[email]['profile']['genres']:
+        messagebox.showinfo("Info", "No hay suficientes valoraciones para generar recomendaciones.")
+        return pd.DataFrame()
+
+    # Obtener el perfil del usuario
+    user_profile = users[email]['profile']['genres']
+
+    # Calcular el puntaje para cada película basado en géneros
+    def calculate_genre_score(genres):
+        if pd.isna(genres):
+            return 0
+        genre_list = [genre.strip() for genre in genres.split(',')]
+        return sum(user_profile.get(genre, 0) for genre in genre_list)
+
+    # Calcular puntajes y ordenar
+    df['Genre_Score'] = df['genre'].apply(calculate_genre_score)
+    recommendations = df.sort_values(by='Genre_Score', ascending=False).head(10)
+
+    return recommendations[['title', 'genre', 'director', 'Genre_Score']]
+
+# --------------------------
+# Ventana para Valorar Películas
+# --------------------------
+def rate_movies(email):
+    def submit_rating():
+        selected_movie = movie_combobox.get().strip()  # Eliminar espacios extras
+        rating = rating_slider.get()
+        
+        if not selected_movie:
+            messagebox.showerror("Error", "Por favor, selecciona o escribe una película válida.")
+            return
+        
+        # Búsqueda flexible: normalizar nombres de películas
+        matching_movies = df[df['title'].str.strip().str.lower() == selected_movie.lower()]
+        
+        if matching_movies.empty:
+            messagebox.showerror("Error", f"La película '{selected_movie}' no existe en la base de datos. Verifica el nombre.")
+            return
+        
+        # Obtener el título exacto desde el DataFrame para evitar problemas
+        exact_movie_title = matching_movies.iloc[0]['title']
+        
+        if rating <= 0:
+            messagebox.showerror("Error", "La valoración debe ser mayor que 0.")
+            return
+
+        # Actualizar perfil del usuario
+        update_user_profile(email, exact_movie_title, int(rating))
+        messagebox.showinfo("Éxito", f"Valoración guardada: {exact_movie_title} -> {int(rating)} estrellas")
+        rate_window.destroy()
+
+    # Crear la ventana de valoración
+    rate_window = tb.Toplevel(root)
+    rate_window.title("Valorar Película")
+    rate_window.geometry("800x500")
+
+    ttk.Label(rate_window, text="Buscar o escribir una película:").pack(pady=10)
+
+    # Configurar el Combobox para búsqueda flexible
+    movie_titles = df['title'].dropna().unique().tolist()
+    movie_combobox = ttk.Combobox(rate_window, values=movie_titles, width=40)
+    movie_combobox.pack(pady=5)
+
+    # Permitir autocompletado (opcional si no soportado en ttk.Combobox)
+    movie_combobox.bind("<Return>", lambda event: submit_rating())
+
+    ttk.Label(rate_window, text="Valora la película (1-5):").pack(pady=10)
+    rating_slider = ttk.Scale(rate_window, from_=1, to=5, orient=HORIZONTAL, length=300)
+    rating_slider.set(3)  # Valor inicial predeterminado
+    rating_slider.pack(pady=5)
+
+    # Botón para guardar la valoración
+    tb.Button(rate_window, text="Guardar Valoración", command=submit_rating, bootstyle=SUCCESS).pack(pady=10)
+
+# --------------------------
+# Ventana Principal de Recomendaciones
+# --------------------------
+def main_recommendations_window(email):
+    users = load_users()
+    user_name = users[email]["name"]  # Recuperar el nombre del usuario desde el JSON
+
+    def generate_recommendations():
+        recommendations = recommend_movies_based_on_profile(email)
+        if recommendations.empty:
+            results_text.set("No se encontraron recomendaciones. Valora más películas para obtener mejores resultados.")
+        else:
+            results_text.set('')
+            for _, row in recommendations.iterrows():
+                results_text.set(results_text.get() +
+                                 f"🎬 {row['title']}\nGéneros: {row['genre']}\n"
+                                 f"Director: {row['director']}\nPuntaje: {row['Genre_Score']:.1f}\n\n")
+
+    # Crear ventana principal más grande
+    main_window = tb.Toplevel(root)
+    main_window.title("Recomendador Personalizado de Películas")
+    main_window.geometry("1200x800")
+
+    # Mostrar el nombre del usuario
+    ttk.Label(main_window, text=f"🎥 Bienvenido, {user_name}", font=("Arial", 18)).pack(pady=20)
+
+    # Botón para generar recomendaciones
+    tb.Button(main_window, text="Generar Recomendaciones", command=generate_recommendations,
+              bootstyle=PRIMARY, width=30).pack(pady=10)
+
+    global results_text
+    results_text = tb.StringVar()
+    results_label = ttk.Label(main_window, textvariable=results_text, wraplength=1100, justify="left", font=("Arial", 12))
+    results_label.pack(padx=20, pady=20)
+
+    # Botones adicionales
+    tb.Button(main_window, text="Valorar Películas", command=lambda: rate_movies(email),
+              bootstyle=INFO, width=30).pack(pady=10)
+    tb.Button(main_window, text="Salir", command=main_window.destroy, bootstyle=DANGER, width=30).pack(pady=10)
+# --------------------------
+# Funciones de Login y Registro
+# --------------------------
+def login():
+    def validate_login():
+        email = entry_email.get()
+        password = entry_password.get()
+        users = load_users()
+
+        if email in users and users[email]["password"] == password:
+            messagebox.showinfo("Éxito", f"Bienvenido {users[email]['name']}!")
+            login_window.destroy()
+            root.withdraw()  # Ocultar ventana principal
+            main_recommendations_window(email)
+        else:
+            messagebox.showerror("Error", "Correo o contraseña incorrectos.")
+
+    login_window = tb.Toplevel(root)
+    login_window.title("Iniciar Sesión")
+    login_window.geometry("600x400")
+
+    ttk.Label(login_window, text="Correo:").pack(pady=5)
+    entry_email = ttk.Entry(login_window)
+    entry_email.pack(pady=5)
+
+    ttk.Label(login_window, text="Contraseña:").pack(pady=5)
+    entry_password = ttk.Entry(login_window, show="*")
+    entry_password.pack(pady=5)
+
+    tb.Button(login_window, text="Iniciar Sesión", command=validate_login, bootstyle=SUCCESS).pack(pady=10)
 
 def create_user():
     def save_new_user():
@@ -27,17 +227,18 @@ def create_user():
         email = entry_email.get()
         password = entry_password.get()
         users = load_users()
+
         if email in users:
             messagebox.showerror("Error", "El correo ya está registrado.")
         else:
-            users[email] = {"name": name, "password": password}
+            users[email] = {"name": name, "password": password, "ratings": {}, "profile": {"genres": {}}}
             save_users(users)
             messagebox.showinfo("Éxito", "Usuario registrado correctamente.")
             create_user_window.destroy()
 
-    create_user_window = tk.Toplevel(root)
+    create_user_window = tb.Toplevel(root)
     create_user_window.title("Crear Usuario")
-    create_user_window.geometry("300x200")
+    create_user_window.geometry("300x250")
 
     ttk.Label(create_user_window, text="Nombre:").pack(pady=5)
     entry_name = ttk.Entry(create_user_window)
@@ -51,92 +252,20 @@ def create_user():
     entry_password = ttk.Entry(create_user_window, show="*")
     entry_password.pack(pady=5)
 
-    ttk.Button(create_user_window, text="Guardar", command=save_new_user).pack(pady=10)
+    tb.Button(create_user_window, text="Guardar", command=save_new_user, bootstyle=SUCCESS).pack(pady=10)
 
-def login():
-    def validate_login():
-        email = entry_email.get()
-        password = entry_password.get()
-        users = load_users()
-        if email in users and users[email]['password'] == password:
-            messagebox.showinfo("Éxito", f"Bienvenido {users[email]['name']}!")
-            login_window.destroy()
-            main_recommendations_window()
-        else:
-            messagebox.showerror("Error", "Correo o contraseña incorrectos.")
+# --------------------------
+# Ventana Principal
+# --------------------------
+root = tb.Window(themename="superhero")
+root.title("Sistema de Recomendación")
+root.geometry("600x400")
 
-    login_window = tk.Toplevel(root)
-    login_window.title("Iniciar Sesión")
-    login_window.geometry("300x150")
-
-    ttk.Label(login_window, text="Correo:").pack(pady=5)
-    entry_email = ttk.Entry(login_window)
-    entry_email.pack(pady=5)
-
-    ttk.Label(login_window, text="Contraseña:").pack(pady=5)
-    entry_password = ttk.Entry(login_window, show="*")
-    entry_password.pack(pady=5)
-
-    ttk.Button(login_window, text="Iniciar Sesión", command=validate_login).pack(pady=10)
-
-# Datos simulados y configuración inicial
-def load_data():
-    """ Cargar y preprocesar los datos. """
-    global genre_matrix, director_matrix, collection_matrix, df, user_profile_vector, combined_features
-    file_path = 'peliculas.csv'
-    df = pd.read_csv(file_path)
-
-    df_attributes = df[['genre', 'director', 'view_the_collection']].fillna('')
-    for col in ['genre', 'director', 'view_the_collection']:
-        df_attributes[col] = df_attributes[col].apply(lambda x: [i.strip() for i in x.split(',') if i])
-
-    mlb_genre, mlb_director, mlb_collection = MultiLabelBinarizer(), MultiLabelBinarizer(), MultiLabelBinarizer()
-    genre_matrix = mlb_genre.fit_transform(df_attributes['genre'])
-    director_matrix = mlb_director.fit_transform(df_attributes['director'])
-    collection_matrix = mlb_collection.fit_transform(df_attributes['view_the_collection'])
-
-    combined_features = np.hstack([genre_matrix, director_matrix, collection_matrix])
-    user_profile_vector = np.random.rand(1, combined_features.shape[1])
-
-def recommend_movies():
-    cosine_similarities = cosine_similarity(user_profile_vector, combined_features)
-    similarity_scores = cosine_similarities.flatten()
-    recommended_indices = similarity_scores.argsort()[::-1]
-    top_movies = df.loc[recommended_indices, ['title', 'genre', 'director']].head(10)
-
-    results_text.set('')
-    for _, row in top_movies.iterrows():
-        results_text.set(results_text.get() + f"{row['title']} \nGéneros: {row['genre']} \nDirector: {row['director']}\n\n")
-
-def main_recommendations_window():
-    main_window = tk.Toplevel(root)
-    main_window.title("Recomendador de Películas")
-    main_window.geometry("600x400")
-
-    welcome_label = ttk.Label(main_window, text="Generador de Recomendaciones", font=("Arial", 14))
-    welcome_label.pack(pady=10)
-
-    recommend_button = ttk.Button(main_window, text="Generar Recomendaciones", command=recommend_movies)
-    recommend_button.pack(pady=10)
-
-    global results_text
-    results_text = tk.StringVar()
-    results_label = ttk.Label(main_window, textvariable=results_text, wraplength=550, justify="left")
-    results_label.pack(padx=10, pady=10)
-
-    exit_button = ttk.Button(main_window, text="Salir", command=main_window.destroy)
-    exit_button.pack(pady=10)
-
-# Configuración GUI principal
-root = tk.Tk()
-root.title("Sistema de Usuarios y Recomendaciones")
-root.geometry("300x200")
-
-# Botones principales
-ttk.Button(root, text="Crear Usuario", command=create_user).pack(pady=10)
-ttk.Button(root, text="Iniciar Sesión", command=login).pack(pady=10)
-ttk.Button(root, text="Salir", command=root.quit).pack(pady=10)
+ttk.Label(root, text="Sistema de Recomendación de Películas", font=("Arial", 12)).pack(pady=10)
+tb.Button(root, text="Crear Usuario", command=create_user, bootstyle=INFO).pack(pady=5)
+tb.Button(root, text="Iniciar Sesión", command=login, bootstyle=SUCCESS).pack(pady=5)
+tb.Button(root, text="Salir", command=root.quit, bootstyle=DANGER).pack(pady=5)
 
 # Cargar datos
-load_data()
+df = load_data()
 root.mainloop()
