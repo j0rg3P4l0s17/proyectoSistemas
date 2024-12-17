@@ -1,4 +1,5 @@
 import ttkbootstrap as tb
+import tkinter as tk
 from ttkbootstrap.constants import *
 from tkinter import ttk, messagebox
 from sklearn.metrics.pairwise import cosine_similarity
@@ -159,15 +160,23 @@ def main_recommendations_window(email):
     user_name = users[email]["name"]  # Recuperar el nombre del usuario desde el JSON
 
     def generate_recommendations():
-        recommendations = recommend_movies_based_on_profile(email)
+        # Limitar las recomendaciones a las 5 mejores
+        recommendations = recommend_movies_based_on_profile(email).head(5)
+
+        # Limpiar el contenido previo del scrollable frame
+        for widget in scrollable_frame.winfo_children():
+            widget.destroy()
+
+        # Mostrar las recomendaciones
         if recommendations.empty:
-            results_text.set("No se encontraron recomendaciones. Valora más películas para obtener mejores resultados.")
+            ttk.Label(scrollable_frame, text="No se encontraron recomendaciones. Valora más películas.",
+                      font=("Arial", 12), foreground="red").pack(pady=5)
         else:
-            results_text.set('')
             for _, row in recommendations.iterrows():
-                results_text.set(results_text.get() +
-                                 f"🎬 {row['title']}\nGéneros: {row['genre']}\n"
-                                 f"Director: {row['director']}\nPuntaje: {row['Genre_Score']:.1f}\n\n")
+                ttk.Label(scrollable_frame, text=f"🎬 {row['title']}", font=("Arial", 12, "bold")).pack(anchor="w", pady=5)
+                ttk.Label(scrollable_frame, text=f"Géneros: {row['genre']}", font=("Arial", 10)).pack(anchor="w")
+                ttk.Label(scrollable_frame, text=f"Director: {row['director']}", font=("Arial", 10)).pack(anchor="w")
+                ttk.Separator(scrollable_frame, orient="horizontal").pack(fill="x", pady=5)
 
     # Crear ventana principal más grande
     main_window = tb.Toplevel(root)
@@ -181,14 +190,32 @@ def main_recommendations_window(email):
     tb.Button(main_window, text="Generar Recomendaciones", command=generate_recommendations,
               bootstyle=PRIMARY, width=30).pack(pady=10)
 
-    global results_text
-    results_text = tb.StringVar()
-    results_label = ttk.Label(main_window, textvariable=results_text, wraplength=1100, justify="left", font=("Arial", 12))
-    results_label.pack(padx=20, pady=20)
+    # Configuración del scrollable frame
+    container = ttk.Frame(main_window)
+    container.pack(fill="both", expand=True, padx=10, pady=10)
 
-    # Botones adicionales
+    canvas = tk.Canvas(container)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollable_frame = ttk.Frame(canvas)
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+
+    # Crear ventana en el canvas
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    # Empaquetar canvas y scrollbar
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # Botón para valorar películas
     tb.Button(main_window, text="Valorar Películas", command=lambda: rate_movies(email),
               bootstyle=INFO, width=30).pack(pady=10)
+
+    # Botón para salir
     tb.Button(main_window, text="Salir", command=main_window.destroy, bootstyle=DANGER, width=30).pack(pady=10)
 # --------------------------
 # Funciones de Login y Registro

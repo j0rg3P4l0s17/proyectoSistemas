@@ -6,17 +6,21 @@
             "Spider-Man: Into the Spider-Verse": 2,
             "Black Panther": 3,
             "Logan": 4,
-            "Coco": 5
+            "Coco": 5,
+            "Thor: Ragnarok": 2,
+            "Skyfall": 3
         },
         "profile": {
             "genres": {
-                "action": 9,
-                "adventure": 14,
-                "fantasy": 9,
-                "comedy": 7,
+                "action": 14,
+                "adventure": 19,
+                "fantasy": 11,
+                "comedy": 9,
                 "kids and family": 7,
                 "animation": 7,
-                "music": 5
+                "music": 5,
+                "sci fi": 2,
+                "mystery and thriller": 3
             }
         }
     }
