@@ -23,5 +23,20 @@
                 "mystery and thriller": 3
             }
         }
+    },
+    "vchapixbusiness@gmail.com": {
+        "name": "david",
+        "password": "12345",
+        "ratings": {
+            "Avengers: Endgame": 2
+        },
+        "profile": {
+            "genres": {
+                "sci fi": 2,
+                "adventure": 2,
+                "action": 2,
+                "fantasy": 2
+            }
+        }
     }
 }

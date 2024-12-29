@@ -71,7 +71,6 @@ def update_user_profile(email, movie_title, rating):
 
     save_users(users)
 
-
 # --------------------------
 # Generar Recomendaciones
 # --------------------------
@@ -84,6 +83,7 @@ def recommend_movies_based_on_profile(email):
 
     # Obtener el perfil del usuario
     user_profile = users[email]['profile']['genres']
+    user_rated_movies = users[email]['ratings'].keys()
 
     # Calcular el puntaje para cada película basado en géneros
     def calculate_genre_score(genres):
@@ -92,9 +92,13 @@ def recommend_movies_based_on_profile(email):
         genre_list = [genre.strip() for genre in genres.split(',')]
         return sum(user_profile.get(genre, 0) for genre in genre_list)
 
-    # Calcular puntajes y ordenar
+    # Filtrar las películas ya vistas y calcular los puntajes
     df['Genre_Score'] = df['genre'].apply(calculate_genre_score)
-    recommendations = df.sort_values(by='Genre_Score', ascending=False).head(10)
+    recommendations = (
+        df[~df['title'].isin(user_rated_movies)]  # Excluir películas valoradas
+        .sort_values(by='Genre_Score', ascending=False)
+        .head(10)
+    )
 
     return recommendations[['title', 'genre', 'director', 'Genre_Score']]
 
@@ -105,21 +109,21 @@ def rate_movies(email):
     def submit_rating():
         selected_movie = movie_combobox.get().strip()  # Eliminar espacios extras
         rating = rating_slider.get()
-        
+
         if not selected_movie:
             messagebox.showerror("Error", "Por favor, selecciona o escribe una película válida.")
             return
-        
+
         # Búsqueda flexible: normalizar nombres de películas
         matching_movies = df[df['title'].str.strip().str.lower() == selected_movie.lower()]
-        
+
         if matching_movies.empty:
             messagebox.showerror("Error", f"La película '{selected_movie}' no existe en la base de datos. Verifica el nombre.")
             return
-        
+
         # Obtener el título exacto desde el DataFrame para evitar problemas
         exact_movie_title = matching_movies.iloc[0]['title']
-        
+
         if rating <= 0:
             messagebox.showerror("Error", "La valoración debe ser mayor que 0.")
             return
@@ -159,9 +163,12 @@ def main_recommendations_window(email):
     users = load_users()
     user_name = users[email]["name"]  # Recuperar el nombre del usuario desde el JSON
 
+    def logout():
+        main_window.destroy()
+        root.deiconify()  # Volver a mostrar la ventana principal
+
     def generate_recommendations():
-        # Limitar las recomendaciones a las 5 mejores
-        recommendations = recommend_movies_based_on_profile(email).head(5)
+        recommendations = recommend_movies_based_on_profile(email)
 
         # Limpiar el contenido previo del scrollable frame
         for widget in scrollable_frame.winfo_children():
@@ -173,9 +180,9 @@ def main_recommendations_window(email):
                       font=("Arial", 12), foreground="red").pack(pady=5)
         else:
             for _, row in recommendations.iterrows():
-                ttk.Label(scrollable_frame, text=f"🎬 {row['title']}", font=("Arial", 12, "bold")).pack(anchor="w", pady=5)
-                ttk.Label(scrollable_frame, text=f"Géneros: {row['genre']}", font=("Arial", 10)).pack(anchor="w")
-                ttk.Label(scrollable_frame, text=f"Director: {row['director']}", font=("Arial", 10)).pack(anchor="w")
+                ttk.Label(scrollable_frame, text=f"🎬 {row['title']}", font=("Arial", 12, "bold")).pack(anchor="center", pady=5)
+                ttk.Label(scrollable_frame, text=f"Géneros: {row['genre']}", font=("Arial", 10)).pack(anchor="center")
+                ttk.Label(scrollable_frame, text=f"Director: {row['director']}", font=("Arial", 10)).pack(anchor="center")
                 ttk.Separator(scrollable_frame, orient="horizontal").pack(fill="x", pady=5)
 
     # Crear ventana principal más grande
@@ -215,8 +222,12 @@ def main_recommendations_window(email):
     tb.Button(main_window, text="Valorar Películas", command=lambda: rate_movies(email),
               bootstyle=INFO, width=30).pack(pady=10)
 
+    # Botón para cerrar sesión
+    tb.Button(main_window, text="Cerrar Sesión", command=logout, bootstyle=SECONDARY, width=30).pack(pady=10)
+
     # Botón para salir
     tb.Button(main_window, text="Salir", command=main_window.destroy, bootstyle=DANGER, width=30).pack(pady=10)
+
 # --------------------------
 # Funciones de Login y Registro
 # --------------------------
