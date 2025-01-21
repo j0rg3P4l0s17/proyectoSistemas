@@ -83,7 +83,7 @@ def recommend_movies_based_on_profile(email):
 
     # Obtener el perfil del usuario
     user_profile = users[email]['profile']['genres']
-    user_rated_movies = users[email]['ratings'].keys()
+    user_rated_movies = set(users[email]['ratings'].keys())  # Conjunto de películas ya valoradas
 
     # Calcular el puntaje para cada película basado en géneros
     def calculate_genre_score(genres):
@@ -92,15 +92,19 @@ def recommend_movies_based_on_profile(email):
         genre_list = [genre.strip() for genre in genres.split(',')]
         return sum(user_profile.get(genre, 0) for genre in genre_list)
 
-    # Filtrar las películas ya vistas y calcular los puntajes
+    # Calcular puntajes para las películas
     df['Genre_Score'] = df['genre'].apply(calculate_genre_score)
+
+    # Filtrar películas vistas y eliminar duplicados
     recommendations = (
-        df[~df['title'].isin(user_rated_movies)]  # Excluir películas valoradas
+        df[~df['title'].isin(user_rated_movies)]  # Excluir películas ya valoradas por el usuario
+        .drop_duplicates(subset='title')  # Eliminar duplicados en títulos
         .sort_values(by='Genre_Score', ascending=False)
-        .head(10)
+        .head(10)  # Seleccionar las 10 mejores películas
     )
 
     return recommendations[['title', 'genre', 'director', 'Genre_Score']]
+
 
 # --------------------------
 # Ventana para Valorar Películas

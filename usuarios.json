@@ -3,21 +3,24 @@
         "name": "Jorge",
         "password": "1",
         "ratings": {
-            "Spider-Man: Into the Spider-Verse": 2,
+            "Spider-Man: Into the Spider-Verse": 5,
             "Black Panther": 3,
             "Logan": 4,
             "Coco": 5,
             "Thor: Ragnarok": 2,
-            "Skyfall": 3
+            "Skyfall": 3,
+            "Wonder Woman": 5,
+            "Spider-Man: Far From Home": 5,
+            "Shazam!": 5
         },
         "profile": {
             "genres": {
-                "action": 14,
-                "adventure": 19,
-                "fantasy": 11,
-                "comedy": 9,
-                "kids and family": 7,
-                "animation": 7,
+                "action": 34,
+                "adventure": 39,
+                "fantasy": 31,
+                "comedy": 24,
+                "kids and family": 12,
+                "animation": 12,
                 "music": 5,
                 "sci fi": 2,
                 "mystery and thriller": 3
