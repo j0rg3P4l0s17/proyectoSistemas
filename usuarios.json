@@ -1,44 +1,23 @@
 {
     "1": {
-        "name": "Jorge",
+        "name": "1",
         "password": "1",
         "ratings": {
-            "Spider-Man: Into the Spider-Verse": 5,
-            "Black Panther": 3,
-            "Logan": 4,
-            "Coco": 5,
-            "Thor: Ragnarok": 2,
-            "Skyfall": 3,
-            "Wonder Woman": 5,
-            "Spider-Man: Far From Home": 5,
-            "Shazam!": 5
+            "Mission: Impossible -- Fallout": 3,
+            "Coraline": 3,
+            "Dunkirk": 4
         },
         "profile": {
             "genres": {
-                "action": 34,
-                "adventure": 39,
-                "fantasy": 31,
-                "comedy": 24,
-                "kids and family": 12,
-                "animation": 12,
-                "music": 5,
-                "sci fi": 2,
-                "mystery and thriller": 3
-            }
-        }
-    },
-    "vchapixbusiness@gmail.com": {
-        "name": "david",
-        "password": "12345",
-        "ratings": {
-            "Avengers: Endgame": 2
-        },
-        "profile": {
-            "genres": {
-                "sci fi": 2,
-                "adventure": 2,
-                "action": 2,
-                "fantasy": 2
+                "action": 3,
+                "mystery and thriller": 3,
+                "adventure": 3,
+                "kids and family": 3,
+                "animation": 3,
+                "fantasy": 3,
+                "drama": 4,
+                "history": 4,
+                "war": 4
             }
         }
     }

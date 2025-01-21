@@ -3,6 +3,7 @@ import tkinter as tk
 from ttkbootstrap.constants import *
 from tkinter import ttk, messagebox
 from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 import pandas as pd
 import json
 import os
@@ -75,37 +76,39 @@ def update_user_profile(email, movie_title, rating):
 # Generar Recomendaciones
 # --------------------------
 def recommend_movies_based_on_profile(email):
-    """ Genera recomendaciones basadas en el perfil de géneros del usuario. """
+    """ Genera recomendaciones usando similitud por coseno entre el perfil del usuario y las películas. """
     users = load_users()
     if email not in users or not users[email]['profile']['genres']:
         messagebox.showinfo("Info", "No hay suficientes valoraciones para generar recomendaciones.")
         return pd.DataFrame()
 
-    # Obtener el perfil del usuario
+    # Obtener el perfil de usuario como un vector de géneros
     user_profile = users[email]['profile']['genres']
-    user_rated_movies = set(users[email]['ratings'].keys())  # Conjunto de películas ya valoradas
 
-    # Calcular el puntaje para cada película basado en géneros
-    def calculate_genre_score(genres):
-        if pd.isna(genres):
-            return 0
-        genre_list = [genre.strip() for genre in genres.split(',')]
-        return sum(user_profile.get(genre, 0) for genre in genre_list)
+    # Crear una lista de géneros únicos en el dataset
+    all_genres = set(genre.strip() for genres in df['genre'].dropna() for genre in genres.split(','))
 
-    # Calcular puntajes para las películas
-    df['Genre_Score'] = df['genre'].apply(calculate_genre_score)
+    # Crear un vector de usuario con los géneros ponderados por sus puntuaciones
+    user_vector = np.array([user_profile.get(genre, 0) for genre in all_genres]).reshape(1, -1)
 
-    # Filtrar películas vistas y eliminar duplicados
-    recommendations = (
-        df[~df['title'].isin(user_rated_movies)]  # Excluir películas ya valoradas por el usuario
-        .drop_duplicates(subset='title')  # Eliminar duplicados en títulos
-        .sort_values(by='Genre_Score', ascending=False)
-        .head(10)  # Seleccionar las 10 mejores películas
-    )
+    # Función para crear el vector de cada película basado en géneros
+    def movie_to_vector(genres):
+        genre_list = genres.split(',') if pd.notna(genres) else []
+        return np.array([1 if genre in genre_list else 0 for genre in all_genres])
 
-    return recommendations[['title', 'genre', 'director', 'Genre_Score']]
+    # Construcción de la matriz de películas
+    movie_vectors = np.array([movie_to_vector(genres) for genres in df['genre'].fillna('')])
 
+    # Calcular similitud por coseno entre usuario y películas
+    similarities = cosine_similarity(user_vector, movie_vectors)[0]
 
+    df['Cosine_Similarity'] = similarities
+
+    # Excluir películas que el usuario ya ha valorado
+    user_rated_movies = set(users[email]['ratings'].keys())
+    recommendations = df[~df['title'].isin(user_rated_movies)].sort_values(by='Cosine_Similarity', ascending=False).head(10)
+
+    return recommendations[['title', 'genre', 'director', 'Cosine_Similarity']]
 # --------------------------
 # Ventana para Valorar Películas
 # --------------------------
@@ -201,24 +204,25 @@ def main_recommendations_window(email):
     tb.Button(main_window, text="Generar Recomendaciones", command=generate_recommendations,
               bootstyle=PRIMARY, width=30).pack(pady=10)
 
-    # Configuración del scrollable frame
+    # Contenedor centrado con scrollable frame
     container = ttk.Frame(main_window)
-    container.pack(fill="both", expand=True, padx=10, pady=10)
+    container.pack(expand=True, fill="both", padx=20, pady=20)
 
-    canvas = tk.Canvas(container)
+    canvas = tk.Canvas(container, highlightthickness=0)  # Sin bordes adicionales
     scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    
     scrollable_frame = ttk.Frame(canvas)
-
     scrollable_frame.bind(
         "<Configure>",
         lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
     )
 
-    # Crear ventana en el canvas
-    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    # Centrar contenido horizontalmente dentro del canvas
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="n", width=1100)
+
     canvas.configure(yscrollcommand=scrollbar.set)
 
-    # Empaquetar canvas y scrollbar
+    # Ajustar el canvas y la barra de desplazamiento dentro del contenedor
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
 
